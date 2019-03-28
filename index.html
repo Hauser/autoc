@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Autocorrelation</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script src="https://unpkg.com/react@16/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="autoc.js" type="text/javascript"></script>
+    <script type="text/babel">
+        const plotConfig = {
+            responsive: true,
+        };
+        const plotLayout = {
+            margin: {
+                t: 0
+            },
+            legend: {
+                x: 1,
+                y: 0.5,
+            },
+            line: {
+                shape: 'linear',
+                smoothing: 1,
+            },
+            type: 'scatter',
+        };
+        const matrix = (str) => {
+            return str[0]
+                .split(/\s+/)
+                .filter(s => s !== '');
+        };
+        const defaultData = [{
+            y: matrix`
+                35	30	34	92	100
+                17	36	89	72	35
+                95	33	44	83	58
+                21	56	3	6	56
+                45	38	47	64	14
+                36	97	100	81	78
+                52	5	21	40	90
+                97	13	66	21	15
+                69	85	83	27	38
+                71	53	8	39	1
+                72	93	77	60	92
+                99	53	43	25	75
+                87	45	36	54	46
+                29	57	24	52	62
+                81	72	33	100	36
+                38	100	58	83	15
+                45	92	86	62	40
+                25	81	59	61	61
+                86	31	3	46	93
+                27	1	30	19	94
+            `,
+            x: Array.from(Array(100).keys()),
+            name: 'y[x]',
+        }];
+
+        const Plot = ({ data }) => {
+            const ref = React.createRef();
+
+            React.useEffect(() => {
+                Plotly.newPlot(ref.current, data, plotLayout, plotConfig);
+            });
+
+            return (
+                <div ref={ref} />
+            )
+        };
+
+        const apiConfig = {
+            amount: 100,
+            min: 0,
+            max: 1,
+        };
+
+        const App = () => {
+            const normalize = React.createRef();
+            const autoScale = React.createRef();
+
+            const [ data, setData ] = React.useState(defaultData);
+            const [ tau, setTau ] = React.useState(0);
+
+            const fetchNew = async () => {
+                console.log('api call: www.random.org');
+
+                const { amount, min, max } = apiConfig;
+
+                let res = await fetch(`https://www.random.org/integers/?num=${amount}&min=${min}&max=${max}&col=1&base=10&format=plain&rnd=new`);
+                let txt = await res.text();
+                let data = txt.split('\n');
+                data.pop();
+
+                setData([{
+                    y: data,
+                    x: Array.from(Array(data.length).keys()),
+                    name: 'y[x]',
+                }]);
+                setTau(0);
+            };
+
+            const shift = () => {
+                let source = data[1] ? data[1] : data[0];
+                let shifted = [...source.y];
+                let last = shifted.pop();
+                shifted.unshift(last);
+                let c = autoCorrelation(shifted, normalize.current.checked, autoScale.current.checked);
+
+                let newTau = tau + 1 < c.length ? tau + 1 : 0;
+                setData([
+                    data[0],
+                    { y: shifted, name: `y[x-${newTau}]` },
+                    { y: c, name: 'c[x]' }
+                ]);
+                setTau(newTau);
+            };
+
+            React.useEffect(() => void 0, []);
+
+            return (
+                <React.Fragment>
+                    <button onClick={fetchNew}>Fetch</button>
+                    <button onClick={shift}>Shift</button><br /><br />
+                    <input ref={normalize} type="checkbox" defaultChecked={true} />Normalize<br />
+                    <input ref={autoScale} type="checkbox" defaultChecked={true} />Auto Scale<br/><br /><br />
+                    <Plot data={data} />
+                </React.Fragment>
+            )
+        };
+
+	    ReactDOM.render(<App />, document.querySelector('#root'));
+    </script>
+</body>
+
+</html>
