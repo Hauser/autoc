@@ -14,60 +14,123 @@
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <script src="autoc.js" type="text/javascript"></script>
     <script type="text/babel">
-        const plotConfig = {
+        var plotConfig = {
             responsive: true,
         };
-        const plotLayout = {
-            margin: {
-                t: 0
-            },
+        var plotConfigC = {
+            ...plotConfig,
+        };
+        var plotLayout = {
+            title: 'y[x], y[x+τ]',
             legend: {
                 x: 1,
                 y: 0.5,
             },
-            line: {
-                shape: 'linear',
-                smoothing: 1,
+            xaxis: {
+                range: [-150, 150],
             },
-            type: 'scatter',
+            yaxis: {
+                range: [-10, 110],
+            },
         };
+        var plotLayoutC = {
+            ...plotLayout,
+            title: 'c[x]',
+        };
+        var apiConfig = {
+            amount: 100,
+            min: -1000,
+            max: 1000,
+        };
+        var colors = undefined;
+        {
+            const d3Colors = Plotly.d3.scale.category10();
+            colors = {
+                blue: d3Colors(0),
+                orange: d3Colors(1),
+                green: d3Colors(2),
+            };
+        }
+        var animationSpeed = 75;
+
         const matrix = (str) => {
             return str[0]
                 .split(/\s+/)
                 .filter(s => s !== '');
         };
-        const defaultData = [{
-            y: matrix`
-                35	30	34	92	100
-                17	36	89	72	35
-                95	33	44	83	58
-                21	56	3	6	56
-                45	38	47	64	14
-                36	97	100	81	78
-                52	5	21	40	90
-                97	13	66	21	15
-                69	85	83	27	38
-                71	53	8	39	1
-                72	93	77	60	92
-                99	53	43	25	75
-                87	45	36	54	46
-                29	57	24	52	62
-                81	72	33	100	36
-                38	100	58	83	15
-                45	92	86	62	40
-                25	81	59	61	61
-                86	31	3	46	93
-                27	1	30	19	94
-            `,
-            x: Array.from(Array(100).keys()),
-            name: 'y[x]',
-        }];
+        const createTime = (length, offset = 0) => {
+            return Array.from(Array(length * 2).keys())
+                .map(x => x + offset);
+        };
+        const mirror = (data) => {
+            let temp = [...data].slice(1);
+            return [...data.reverse(), ...temp];
+        };
 
-        const Plot = ({ data }) => {
+        const samples = matrix`
+            35	30	34	92	100
+            17	36	89	72	35
+            95	33	44	83	58
+            21	56	3	6	56
+            45	38	47	64	14
+            36	97	100	81	78
+            52	5	21	40	90
+            97	13	66	21	15
+            69	85	83	27	38
+            71	53	8	39	1
+            72	93	77	60	92
+            99	53	43	25	75
+            87	45	36	54	46
+            29	57	24	52	62
+            81	72	33	100	36
+            38	100	58	83	15
+            45	92	86	62	40
+            25	81	59	61	61
+            86	31	3	46	93
+            27	1	30	19	94
+        `;
+
+        const defaultData = [
+            {
+                y: samples,
+                x: createTime(samples.length, -(samples.length / 2)),
+                name: 'y[x]',
+                line: {
+                    shape: 'spline',
+                },
+                mode: 'lines',
+            },
+            {
+                y: samples,
+                x: createTime(samples.length, -(samples.length - 1) - (samples.length / 2)),
+                name: `y[x+${samples.length - 1}]`,
+                line: {
+                    shape: 'spline',
+                },
+                mode: 'lines',
+            },
+        ];
+        const defaultC = [
+            {
+                y: [],
+                x: [],
+                name: `c[x] (0)`,
+                line: {
+                    shape: 'spline',
+                },
+                mode: 'lines',
+                showlegend: true,
+                marker: {
+                    color: colors.green,
+                }
+            }
+        ];
+
+        const Plot = ({ data, layout, config }) => {
             const ref = React.createRef();
 
             React.useEffect(() => {
-                Plotly.newPlot(ref.current, data, plotLayout, plotConfig);
+                Plotly.newPlot(ref.current, data, layout, config);
             });
 
             return (
@@ -75,18 +138,13 @@
             )
         };
 
-        const apiConfig = {
-            amount: 100,
-            min: 0,
-            max: 1,
-        };
-
         const App = () => {
-            const normalize = React.createRef();
-            const autoScale = React.createRef();
+            const autoShift = React.createRef();
 
             const [ data, setData ] = React.useState(defaultData);
-            const [ tau, setTau ] = React.useState(0);
+            const [ c, setC ] = React.useState(defaultC);
+            const [ tau, setTau ] = React.useState(-samples.length);
+            const [ animate, setAnimate ] = React.useState(false);
 
             const fetchNew = async () => {
                 console.log('api call: www.random.org');
@@ -98,39 +156,82 @@
                 let data = txt.split('\n');
                 data.pop();
 
-                setData([{
-                    y: data,
-                    x: Array.from(Array(data.length).keys()),
-                    name: 'y[x]',
-                }]);
-                setTau(0);
+                plotLayout.xaxis.range = plotLayoutC.xaxis.range = [-(amount + (amount / 2)), amount + (amount / 2)];
+                plotLayout.yaxis.range = plotLayoutC.yaxis.range = [min - (Math.abs(min) / 10), max + (max / 10)];
+
+                setData([
+                    {
+                        ...defaultData[0],
+                        y: data,
+                        x: createTime(amount, -(amount / 2)),
+                    },
+                    {
+                        ...defaultData[1],
+                        y: data,
+                        x: createTime(amount, -(amount - 1) - (amount / 2)),
+                    }
+                ]);
+                setC([
+                    {
+                        ...defaultC[0],
+                    }
+                ]);
+                setTau(-data.length);
             };
 
-            const shift = () => {
-                let source = data[1] ? data[1] : data[0];
-                let shifted = [...source.y];
-                let last = shifted.pop();
-                shifted.unshift(last);
-                let c = autoCorrelation(shifted, normalize.current.checked, autoScale.current.checked);
+            const shift = (direction) => (a, b) => {
+                let source = [...data[0].y];
+                let shifted = [...data[0].y];
 
-                let newTau = tau + 1 < c.length ? tau + 1 : 0;
-                setData([
-                    data[0],
-                    { y: shifted, name: `y[x-${newTau}]` },
-                    { y: c, name: 'c[x]' }
-                ]);
+                let newTau = (direction === 'right')
+                    ? (tau + 1 < source.length ? tau + 1 : -source.length + 1)
+                    : (tau - 1 > -source.length ? tau - 1 : source.length);
+
+                if (newTau < 0) {
+                    source.splice(newTau);
+                    shifted.splice(0, -newTau);
+                } else if (newTau > 0) {
+                    source.splice(0, newTau);
+                    shifted.splice(-newTau);
+                }
+
+                let newC = crossCorrelation(source, shifted, true, true);
+
+                data[1].name = `y[x${newTau <= 0 ? '+' : '-'}${Math.abs(newTau)}]`;
+                data[1].x = createTime(data[0].y.length, newTau - (data[0].y.length / 2));
+
+                c[0].y = newC;
+                c[0].x = createTime(newC.length, (!autoShift.current.checked) ? -data[0].y.length + 1 : -((newC.length + 1) / 2) + 1);
+                c[0].name = `c[x] (${newC.length})`;
+
+                setData(data);
+                setC(c);
                 setTau(newTau);
             };
 
-            React.useEffect(() => void 0, []);
+            const toggleAnimation = () => () => {
+                setAnimate(!animate);
+            };
+
+            React.useEffect(() => {
+                let timeout = undefined;
+                if (animate) {
+                    timeout = setTimeout(() => shift('right')(), animationSpeed);
+                } else {
+                    clearTimeout(timeout);
+                }
+                return () => clearTimeout(timeout);
+            }, [tau, animate]);
 
             return (
                 <React.Fragment>
                     <button onClick={fetchNew}>Fetch</button>
-                    <button onClick={shift}>Shift</button><br /><br />
-                    <input ref={normalize} type="checkbox" defaultChecked={true} />Normalize<br />
-                    <input ref={autoScale} type="checkbox" defaultChecked={true} />Auto Scale<br/><br /><br />
-                    <Plot data={data} />
+                    <button onClick={toggleAnimation()}>Animate</button>
+                    <button onClick={shift('left')}>Left</button>
+                    <button onClick={shift('right')}>Right</button><br /><br />
+                    <input ref={autoShift} type="checkbox" defaultChecked={true} />Auto Shift<br />
+                    <Plot data={data} layout={plotLayout} config={plotConfig} />
+                    <Plot data={c} layout={plotLayoutC} config={plotConfigC} />
                 </React.Fragment>
             )
         };
