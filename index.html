@@ -29,7 +29,7 @@
             ...plotConfig,
         };
         var plotLayout = {
-            title: 'y[x], y[x+τ]',
+            title: 'y[n+τ]',
             legend: {
                 x: 1,
                 y: 0.5,
@@ -40,6 +40,9 @@
             yaxis: {
                 range: [config.min + config.min / 10, config.max + config.max / 10],
             },
+            font: {
+                size: 18,
+            },
         };
         var plotLayoutC = {
             ...plotLayout,
@@ -47,7 +50,7 @@
                 x: 1,
                 y: 0.5,
             },
-            title: 'c[x]',
+            title: 'c[n]',
         };
         var colors = undefined;
         {
@@ -63,37 +66,35 @@
             return Array.from(Array(length * 2).keys())
                 .map(x => x + offset);
         };
-        const mirror = (data) => {
-            let temp = [...data].slice(1);
-            return [...data.reverse(), ...temp];
-        };
-        const sineWave = (range, f) => {
+        const genWave = (range, f) => {
             const [a, b] = range;
+            const omega = 2 * Math.PI * f;
             let wave = [];
-            for (let i = a; i < b; ++i) {
-                wave.push(1/2*(Math.sin(2*Math.PI*f*i) + Math.sin(2*2*Math.PI*f*i)));
+            for (let n = a; n < b; ++n) {
+                wave.push(1/2*(Math.sin(n*omega) + Math.sin(2*n*omega)));
             }
             return wave;
         };
 
-        const samples = sineWave(config.range, config.frequency);
-
+        const wave = genWave(config.range, config.frequency);
         const defaultData = [
             {
-                y: samples,
-                x: createTime(samples.length, -(samples.length / 2)),
-                name: 'y[x]',
+                y: wave,
+                x: createTime(wave.length, -(wave.length / 2)),
+                name: 'x[n]',
                 line: {
                     shape: 'spline',
+                    width: 4,
                 },
                 mode: 'lines',
             },
             {
-                y: samples.slice(samples.length / 2 + config.part[0], samples.length / 2 + config.part[1]),
-                x: createTime(samples.length, -(samples.length - 1) - (samples.length / 2)),
-                name: `y[x+${samples.length - 1}]`,
+                y: wave.slice(wave.length / 2 + config.part[0], wave.length / 2 + config.part[1]),
+                x: createTime(wave.length, -(wave.length - 1) - (wave.length / 2)),
+                name: `y[n+τ]`,
                 line: {
                     shape: 'spline',
+                    width: 4,
                 },
                 mode: 'lines',
             },
@@ -102,9 +103,10 @@
             {
                 y: [],
                 x: [],
-                name: `c[x] (0)`,
+                name: `c[n]`,
                 line: {
                     shape: 'spline',
+                    width: 4,
                 },
                 mode: 'lines',
                 showlegend: true,
@@ -131,7 +133,7 @@
 
             const [ data, setData ] = React.useState(defaultData);
             const [ c, setC ] = React.useState(defaultC);
-            const [ tau, setTau ] = React.useState(-(samples.length / 2) + defaultData[1].y.length / 2);
+            const [ tau, setTau ] = React.useState(-(wave.length / 2) + defaultData[1].y.length / 2);
             const [ animate, setAnimate ] = React.useState(false);
 
             const fetchNew = async () => {
@@ -159,46 +161,33 @@
                     {
                         ...defaultData[1],
                         y: data2,
-                        x: createTime(data2.length, -(data2.length / 2) ),
+                        x: createTime(data2.length, -(data2.length / 2)),
                     }
                 ]);
-                setC([
-                    {
-                        ...defaultC[0],
-                    }
-                ]);
+                setC([{ ...defaultC[0] }]);
                 setTau(-(data.length / 2) + data2.length / 2);
             };
 
-            const shift = (direction) => (a, b) => {
-                let source = [...data[0].y];
-                let shifted = [...data[1].y];
+            const next = (direction) => () => {
+                let x = data[0].y;
+                let y = data[1].y;
+
+                let limit = (x.length / 2) - (y.length / 2);
 
                 let newTau = (direction === 'right')
-                    ? (tau + 1 < (source.length / 2) - (shifted.length / 2) ? tau + 1 : -((source.length / 2) - (shifted.length / 2)))
-                    : (tau - 1 > -((source.length / 2) - (shifted.length / 2)) ? tau - 1 : (source.length / 2) - (shifted.length / 2));
+                    ? (tau + 1 < limit ? tau + 1 : -limit)
+                    : (tau - 1 >= -limit ? tau - 1 : limit);
 
-                let index = 0;
-                if (newTau < 0) {
-                    index = newTau + (source.length / 2) - (shifted.length / 2);
-                    source = source.slice(index, index + shifted.length);
-                    //console.log('a', index);
-                } else if (newTau >= 0) {
-                    index = newTau + (source.length / 2) - (shifted.length / 2);
-                    //console.log('b', index);
-                    source = source.slice(index, index + shifted.length);
-                }
+                let index = newTau + limit;
+                let newC = crossCorrelation(x.slice(index, index + y.length), y, true, true);
 
-                //console.log(index, source.length, shifted.length);
+                plotLayout.title = `y[n${newTau <= 0 ? '+' : '-'}${Math.abs(newTau)}]`;
 
-                let newC = crossCorrelation(source, shifted, true, true);
+                data[1].x = createTime(y.length, newTau - (y.length / 2));
 
-                data[1].name = `y[x${newTau <= 0 ? '+' : '-'}${Math.abs(newTau)}]`;
-                data[1].x = createTime(data[1].y.length, newTau - (data[1].y.length / 2));
-
+                let shift = (autoShift.current && !autoShift.current.checked) ? newTau - y.length + 1 : -((newC.length + 1) / 2) + 1;
                 c[0].y = newC;
-                c[0].x = createTime(newC.length, (!autoShift.current.checked) ? newTau - data[1].y.length + 1 : -((newC.length + 1) / 2) + 1);
-                c[0].name = `c[x] (${newC.length})`;
+                c[0].x = createTime(newC.length, shift);
 
                 setData(data);
                 setC(c);
@@ -212,7 +201,7 @@
             React.useEffect(() => {
                 let timeout = undefined;
                 if (animate) {
-                    timeout = setTimeout(() => shift('right')(), config.tps);
+                    timeout = setTimeout(() => next('right')(), config.tps);
                 } else {
                     clearTimeout(timeout);
                 }
@@ -223,8 +212,8 @@
                 <React.Fragment>
                     <button onClick={fetchNew}>Fetch</button>
                     <button onClick={toggleAnimation()}>Animate</button>
-                    <button onClick={shift('left')}>Left</button>
-                    <button onClick={shift('right')}>Right</button><br /><br />
+                    <button onClick={next('left')}>Left</button>
+                    <button onClick={next('right')}>Right</button><br /><br />
                     <input ref={autoShift} type="checkbox" defaultChecked={true} />Auto Shift<br />
                     <Plot data={data} layout={plotLayout} config={plotConfig} />
                     <Plot data={c} layout={plotLayoutC} config={plotConfigC} />
