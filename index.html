@@ -14,6 +14,14 @@
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <script src="autoc.js" type="text/javascript"></script>
     <script type="text/babel">
+        var config = {
+            min: -1,
+            max: 1,
+            range: [-150, 150],
+            frequency: 1 / 100,
+            part: [-50, 50],
+            tps: 25,
+        };
         var plotConfig = {
             responsive: true,
         };
@@ -27,20 +35,19 @@
                 y: 0.5,
             },
             xaxis: {
-                range: [-150, 150],
+                range: config.range,
             },
             yaxis: {
-                range: [-10, 110],
+                range: [config.min + config.min / 10, config.max + config.max / 10],
             },
         };
         var plotLayoutC = {
             ...plotLayout,
+            legend: {
+                x: 1,
+                y: 0.5,
+            },
             title: 'c[x]',
-        };
-        var apiConfig = {
-            amount: 100,
-            min: -1000,
-            max: 1000,
         };
         var colors = undefined;
         {
@@ -51,13 +58,7 @@
                 green: d3Colors(2),
             };
         }
-        var animationSpeed = 75;
 
-        const matrix = (str) => {
-            return str[0]
-                .split(/\s+/)
-                .filter(s => s !== '');
-        };
         const createTime = (length, offset = 0) => {
             return Array.from(Array(length * 2).keys())
                 .map(x => x + offset);
@@ -66,29 +67,16 @@
             let temp = [...data].slice(1);
             return [...data.reverse(), ...temp];
         };
+        const sineWave = (range, f) => {
+            const [a, b] = range;
+            let wave = [];
+            for (let i = a; i < b; ++i) {
+                wave.push(1/2*(Math.sin(2*Math.PI*f*i) + Math.sin(2*2*Math.PI*f*i)));
+            }
+            return wave;
+        };
 
-        const samples = matrix`
-            35	30	34	92	100
-            17	36	89	72	35
-            95	33	44	83	58
-            21	56	3	6	56
-            45	38	47	64	14
-            36	97	100	81	78
-            52	5	21	40	90
-            97	13	66	21	15
-            69	85	83	27	38
-            71	53	8	39	1
-            72	93	77	60	92
-            99	53	43	25	75
-            87	45	36	54	46
-            29	57	24	52	62
-            81	72	33	100	36
-            38	100	58	83	15
-            45	92	86	62	40
-            25	81	59	61	61
-            86	31	3	46	93
-            27	1	30	19	94
-        `;
+        const samples = sineWave(config.range, config.frequency);
 
         const defaultData = [
             {
@@ -101,7 +89,7 @@
                 mode: 'lines',
             },
             {
-                y: samples,
+                y: samples.slice(samples.length / 2 + config.part[0], samples.length / 2 + config.part[1]),
                 x: createTime(samples.length, -(samples.length - 1) - (samples.length / 2)),
                 name: `y[x+${samples.length - 1}]`,
                 line: {
@@ -143,21 +131,24 @@
 
             const [ data, setData ] = React.useState(defaultData);
             const [ c, setC ] = React.useState(defaultC);
-            const [ tau, setTau ] = React.useState(-samples.length);
+            const [ tau, setTau ] = React.useState(-(samples.length / 2) + defaultData[1].y.length / 2);
             const [ animate, setAnimate ] = React.useState(false);
 
             const fetchNew = async () => {
                 console.log('api call: www.random.org');
 
-                const { amount, min, max } = apiConfig;
+                const { range, min, max } = config;
+                const amount = Math.abs(range[0]) + range[1];
 
                 let res = await fetch(`https://www.random.org/integers/?num=${amount}&min=${min}&max=${max}&col=1&base=10&format=plain&rnd=new`);
                 let txt = await res.text();
                 let data = txt.split('\n');
                 data.pop();
 
-                plotLayout.xaxis.range = plotLayoutC.xaxis.range = [-(amount + (amount / 2)), amount + (amount / 2)];
-                plotLayout.yaxis.range = plotLayoutC.yaxis.range = [min - (Math.abs(min) / 10), max + (max / 10)];
+                //plotLayout.xaxis.range = plotLayoutC.xaxis.range = [-(amount + (amount / 2)), amount + (amount / 2)];
+                //plotLayout.yaxis.range = plotLayoutC.yaxis.range = [min - (Math.abs(min) / 10), max + (max / 10)];
+
+                let data2 = data.slice(data.length / 2 + config.part[0], data.length / 2 + config.part[1]);
 
                 setData([
                     {
@@ -167,8 +158,8 @@
                     },
                     {
                         ...defaultData[1],
-                        y: data,
-                        x: createTime(amount, -(amount - 1) - (amount / 2)),
+                        y: data2,
+                        x: createTime(data2.length, -(data2.length / 2) ),
                     }
                 ]);
                 setC([
@@ -176,32 +167,37 @@
                         ...defaultC[0],
                     }
                 ]);
-                setTau(-data.length);
+                setTau(-(data.length / 2) + data2.length / 2);
             };
 
             const shift = (direction) => (a, b) => {
                 let source = [...data[0].y];
-                let shifted = [...data[0].y];
+                let shifted = [...data[1].y];
 
                 let newTau = (direction === 'right')
-                    ? (tau + 1 < source.length ? tau + 1 : -source.length + 1)
-                    : (tau - 1 > -source.length ? tau - 1 : source.length);
+                    ? (tau + 1 < (source.length / 2) - (shifted.length / 2) ? tau + 1 : -((source.length / 2) - (shifted.length / 2)))
+                    : (tau - 1 > -((source.length / 2) - (shifted.length / 2)) ? tau - 1 : (source.length / 2) - (shifted.length / 2));
 
+                let index = 0;
                 if (newTau < 0) {
-                    source.splice(newTau);
-                    shifted.splice(0, -newTau);
-                } else if (newTau > 0) {
-                    source.splice(0, newTau);
-                    shifted.splice(-newTau);
+                    index = newTau + (source.length / 2) - (shifted.length / 2);
+                    source = source.slice(index, index + shifted.length);
+                    //console.log('a', index);
+                } else if (newTau >= 0) {
+                    index = newTau + (source.length / 2) - (shifted.length / 2);
+                    //console.log('b', index);
+                    source = source.slice(index, index + shifted.length);
                 }
+
+                //console.log(index, source.length, shifted.length);
 
                 let newC = crossCorrelation(source, shifted, true, true);
 
                 data[1].name = `y[x${newTau <= 0 ? '+' : '-'}${Math.abs(newTau)}]`;
-                data[1].x = createTime(data[0].y.length, newTau - (data[0].y.length / 2));
+                data[1].x = createTime(data[1].y.length, newTau - (data[1].y.length / 2));
 
                 c[0].y = newC;
-                c[0].x = createTime(newC.length, (!autoShift.current.checked) ? -data[0].y.length + 1 : -((newC.length + 1) / 2) + 1);
+                c[0].x = createTime(newC.length, (!autoShift.current.checked) ? newTau - data[1].y.length + 1 : -((newC.length + 1) / 2) + 1);
                 c[0].name = `c[x] (${newC.length})`;
 
                 setData(data);
@@ -216,7 +212,7 @@
             React.useEffect(() => {
                 let timeout = undefined;
                 if (animate) {
-                    timeout = setTimeout(() => shift('right')(), animationSpeed);
+                    timeout = setTimeout(() => shift('right')(), config.tps);
                 } else {
                     clearTimeout(timeout);
                 }
