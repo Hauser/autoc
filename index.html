@@ -71,7 +71,7 @@
             const omega = 2 * Math.PI * f;
             let wave = [];
             for (let n = a; n < b; ++n) {
-                wave.push(1/2*(Math.sin(n*omega) + Math.sin(2*n*omega)));
+                wave.push(1 / 2 * (Math.sin(n * omega) + Math.sin( 2 * n * omega)));
             }
             return wave;
         };
@@ -131,12 +131,13 @@
         const App = () => {
             const autoShift = React.createRef();
 
-            const [ data, setData ] = React.useState(defaultData);
-            const [ c, setC ] = React.useState(defaultC);
+            const [ data, setData ] = React.useState([...defaultData]);
+            const [ c, setC ] = React.useState([...defaultC]);
             const [ tau, setTau ] = React.useState(-(wave.length / 2) + defaultData[1].y.length / 2);
             const [ animate, setAnimate ] = React.useState(false);
 
             const fetchNew = async () => {
+                if (animate) return;
                 console.log('api call: www.random.org');
 
                 const { range, min, max } = config;
@@ -147,32 +148,24 @@
                 let data = txt.split('\n');
                 data.pop();
 
-                //plotLayout.xaxis.range = plotLayoutC.xaxis.range = [-(amount + (amount / 2)), amount + (amount / 2)];
-                //plotLayout.yaxis.range = plotLayoutC.yaxis.range = [min - (Math.abs(min) / 10), max + (max / 10)];
+                plotLayout.xaxis.range = plotLayoutC.xaxis.range = [...range];
+                plotLayout.yaxis.range = plotLayoutC.yaxis.range = [min + min / 10, max + max / 10];
 
-                let data2 = data.slice(data.length / 2 + config.part[0], data.length / 2 + config.part[1]);
+                let data2 = data.slice(amount / 2 + config.part[0], amount / 2 + config.part[1]);
 
                 setData([
-                    {
-                        ...defaultData[0],
-                        y: data,
-                        x: createTime(amount, -(amount / 2)),
-                    },
-                    {
-                        ...defaultData[1],
-                        y: data2,
-                        x: createTime(data2.length, -(data2.length / 2)),
-                    }
+                    { ...defaultData[0], y: data, x: createTime(amount, -(amount / 2)) },
+                    { ...defaultData[1], y: data2, x: createTime(amount, -(amount - 1) - (amount / 2)) }
                 ]);
-                setC([{ ...defaultC[0] }]);
-                setTau(-(data.length / 2) + data2.length / 2);
+                setC([...defaultC]);
+                setTau(-(amount / 2) + data2.length / 2);
             };
 
             const next = (direction) => () => {
                 let x = data[0].y;
                 let y = data[1].y;
 
-                let limit = (x.length / 2) - (y.length / 2);
+                let limit = x.length / 2 - y.length / 2;
 
                 let newTau = (direction === 'right')
                     ? (tau + 1 < limit ? tau + 1 : -limit)
@@ -194,7 +187,7 @@
                 setTau(newTau);
             };
 
-            const toggleAnimation = () => () => {
+            const toggleAnimation = () => {
                 setAnimate(!animate);
             };
 
@@ -211,7 +204,7 @@
             return (
                 <React.Fragment>
                     <button onClick={fetchNew}>Fetch</button>
-                    <button onClick={toggleAnimation()}>Animate</button>
+                    <button onClick={toggleAnimation}>Animate</button>
                     <button onClick={next('left')}>Left</button>
                     <button onClick={next('right')}>Right</button><br /><br />
                     <input ref={autoShift} type="checkbox" defaultChecked={true} />Auto Shift<br />
