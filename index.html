@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <title>Autocorrelation</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.4/css/bulma.min.css" rel="stylesheet" />
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 
@@ -226,14 +227,31 @@
 
             return (
                 <React.Fragment>
-                    <GitHub user="Hauser" repository="autoc" />
-                    <button onClick={fetchNew}>Fetch</button>
-                    <button onClick={toggleAnimation}>Animate</button>
-                    <button onClick={next('left')}>Left</button>
-                    <button onClick={next('right')}>Right</button><br /><br />
-                    <input ref={autoShift} type="checkbox" defaultChecked={true} />Auto Shift<br />
-                    <Plot data={data} layout={plotLayout} config={plotConfig} />
-                    <Plot data={c} layout={plotLayoutC} config={plotConfigC} />
+                    <div className="columns">
+                        <div className="column" style={{marginTop: '10px'}}>
+                            <GitHub user="Hauser" repository="autoc"/>
+                            <button className="button is-small" onClick={fetchNew} style={{marginLeft: '10px'}}>Fetch</button>
+                            <button className="button is-small" onClick={toggleAnimation}>Animate</button>
+                            <button className="button is-small" onClick={next('left')}>Left</button>
+                            <button className="button is-small" onClick={next('right')}>Right</button>
+                        </div>
+                    </div>
+                    <div className="columns">
+                        <div className="column">
+                        <label className="checkbox" style={{marginLeft: '10px'}}>
+                                <input ref={autoShift} type="checkbox" defaultChecked={true} />
+                                &nbsp;&nbsp;Auto Shift
+                            </label>
+                        </div>
+                    </div>
+                    <div className="columns is-desktop">
+                        <div className="column">
+                            <Plot data={data} layout={plotLayout} config={plotConfig} />
+                        </div>
+                        <div className="column">
+                            <Plot data={c} layout={plotLayoutC} config={plotConfigC} />
+                        </div>
+                    </div>
                 </React.Fragment>
             )
         };
